@@ -52,7 +52,7 @@ public class TaskRepository implements TasksDataSource{
     }
 
     /**
-     * Return the sigle instance of this class, creating it if necessary.
+     * Return the single instance of this class, creating it if necessary.
      * @param taskRemoteDataSource the backend data source
      * @param taskLocalDataSource the device storage data source
      * @return the {@link TaskRepository} instance
@@ -110,8 +110,44 @@ public class TaskRepository implements TasksDataSource{
     }
 
     @Override
-    public void getTask(@NonNull String taskId, @NonNull GetTaskCallback callback) {
+    public void getTask(@NonNull final String taskId, @NonNull final GetTaskCallback callback) {
+        checkNotNull(taskId);
+        checkNotNull(callback);
 
+        final Task cachedTask = getTaskWithId(taskId);
+
+        //Respond immediately with cache if available
+        //如果缓存可用返回缓存数据
+        if (cachedTask != null){
+            callback.onTaskLoaded(cachedTask);
+            return;
+        }
+
+        //load from server/persisted if needed 从网络或者持久化获取
+
+        //Is the task in local data source? ig not, query the network.
+        //先从持久化获取数据如果获取不到从网络获取
+        mTaskLocalDataSource.getTask(taskId, new GetTaskCallback() {
+            @Override
+            public void onTaskLoaded(Task task) {
+                callback.onTaskLoaded(task);
+            }
+
+            @Override
+            public void onDataNotAvailable() {
+                mTasksRemoteDataSource.getTask(taskId, new GetTaskCallback() {
+                    @Override
+                    public void onTaskLoaded(Task task) {
+                        callback.onTaskLoaded(task);
+                    }
+
+                    @Override
+                    public void onDataNotAvailable() {
+                        callback.onDataNotAvailable();
+                    }
+                });
+            }
+        });
     }
 
     @Override
@@ -193,17 +229,29 @@ public class TaskRepository implements TasksDataSource{
 
     @Override
     public void refreshTasks() {
-
+        mCacheIsDirty = true;
     }
 
     @Override
     public void deleteTask(@NonNull String taskId) {
+        mTasksRemoteDataSource.deleteTask(taskId);
+        mTaskLocalDataSource.deleteTask(taskId);
 
+        if (mCachedTasks == null){
+            mCachedTasks = new LinkedHashMap<>();
+        }
+        mCachedTasks.clear();
     }
 
     @Override
     public void deleteAllTasks() {
+        mTasksRemoteDataSource.clearCompletedTasks();
+        mTaskLocalDataSource.clearCompletedTasks();
 
+        if (mCachedTasks == null) {
+            mCachedTasks = new LinkedHashMap<>();
+        }
+        mCachedTasks.clear();
     }
 
     private void getTasksFromRemoteDataSource(@NonNull final LoadTasksCallback callback){
@@ -240,6 +288,11 @@ public class TaskRepository implements TasksDataSource{
         }
     }
 
+    /**
+     * 返回缓存中的数据
+     * @param taskId taskId
+     * @return task
+     */
     private Task getTaskWithId(@NonNull String taskId){
         checkNotNull(taskId);
         if (mCachedTasks == null || mCachedTasks.isEmpty()) {
