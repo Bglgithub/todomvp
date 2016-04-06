@@ -7,6 +7,7 @@ import com.example.mrtan.mvptest1.data.Task;
 import com.example.mrtan.mvptest1.data.source.TasksDataSource;
 import com.google.common.collect.Lists;
 
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -99,31 +100,40 @@ public class TasksRemoteDataSource implements TasksDataSource {
 
     @Override
     public void activateTask(@NonNull Task task) {
-
+        Task activeTask = new Task(task.getTitle(), task.getDescription(),task.getId());
+        TASK_SERVICE_DATA.put(task.getId(), activeTask);
     }
 
     @Override
     public void activateTask(@NonNull String taskId) {
-
+        //Not required for the remote data source because the {@link TaskRepository} handles
+        //converting from a {@code taskId} to a {@link task} using its cached data.
     }
 
     @Override
     public void clearCompletedTasks() {
-
+        Iterator<Map.Entry<String, Task>> it = TASK_SERVICE_DATA.entrySet().iterator();
+        while(it.hasNext()){
+            Map.Entry<String, Task> entry = it.next();
+            if (entry.getValue().isCompleted()){
+                it.remove();
+            }
+        }
     }
 
     @Override
     public void refreshTasks() {
-
+        //Not required because the {@link TaskRepository} handles the logic of refreshing the
+        //tasks from all the available data source.
     }
 
     @Override
     public void deleteTask(@NonNull String taskId) {
-
+        TASK_SERVICE_DATA.remove(taskId);
     }
 
     @Override
     public void deleteAllTasks() {
-
+        TASK_SERVICE_DATA.clear();
     }
 }
